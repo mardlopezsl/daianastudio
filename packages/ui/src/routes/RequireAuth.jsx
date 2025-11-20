@@ -13,9 +13,11 @@ import { useSelector } from 'react-redux'
  * @returns {React.ReactElement} Children or unauthorized redirect
  */
 const checkFeatureFlag = (features, display, children) => {
-    // Validate features object exists and is properly formatted
+    if (!display) return children
+
+    // If we do not have a feature map (open source / RBAC disabled), allow access.
     if (!features || Array.isArray(features) || Object.keys(features).length === 0) {
-        return <Navigate to='/unauthorized' replace />
+        return children
     }
 
     // Check if feature flag exists and is enabled
@@ -24,7 +26,8 @@ const checkFeatureFlag = (features, display, children) => {
         return isFeatureEnabled ? children : <Navigate to='/unauthorized' replace />
     }
 
-    return <Navigate to='/unauthorized' replace />
+    // If feature not defined, fall back to allowing access to keep OSS usable.
+    return children
 }
 
 export const RequireAuth = ({ permission, display, children }) => {
@@ -43,9 +46,9 @@ export const RequireAuth = ({ permission, display, children }) => {
     }
 
     // Step 2: Deployment Type Specific Logic
-    // Open Source: Only show features without display property
+    // Open Source: ignore feature flags and permissions (RBAC disabled in OSS)
     if (isOpenSource) {
-        return !display ? children : <Navigate to='/unauthorized' replace />
+        return children
     }
 
     // Cloud & Enterprise: Check both permissions and feature flags

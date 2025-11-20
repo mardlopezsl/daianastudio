@@ -25,6 +25,16 @@ export class AccountController {
         }
     }
 
+    public async createUserDirect(req: Request, res: Response, next: NextFunction) {
+        try {
+            const accountService = new AccountService()
+            const data = await accountService.createUserDirect(req.body, req.user)
+            return res.status(StatusCodes.CREATED).json(data)
+        } catch (error) {
+            next(error)
+        }
+    }
+
     public async login(req: Request, res: Response, next: NextFunction) {
         try {
             const accountService = new AccountService()

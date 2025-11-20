@@ -32,6 +32,32 @@ You can also specify the env variables when using `npx`. For example:
 npx flowise start --PORT=3000 --DEBUG=true
 ```
 
+## 📡 Direct User Creation API
+
+Need to provision accounts programmatically? Authenticated admins (same cookies/session as the UI) can call:
+
+```
+POST /api/v1/account/create-user
+Content-Type: application/json
+Cookie: connect.sid=...
+
+{
+    "user": {
+        "name": "Jane Doe",
+        "email": "jane@example.com",
+        "credential": "StrongPassword!1"
+    },
+    "workspace": {
+        "id": "<workspace-id>"
+    },
+    "role": {
+        "id": "<workspace-role-id>"
+    }
+}
+```
+
+The endpoint requires the `workspace:add-user` or `users:manage` permission (same as `/account/invite`). The user is created immediately with `ACTIVE` status, linked to the specified workspace, and no invitation email is sent.
+
 ## 📖 Tests
 
 We use [Cypress](https://github.com/cypress-io) for our e2e testing. If you want to run the test suite in dev mode please follow this guide:

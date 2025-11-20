@@ -1,5 +1,7 @@
-import logo from '@/assets/images/flowise_white.svg'
-import logoDark from '@/assets/images/flowise_dark.svg'
+// import logo from '@/assets/images/flowise_white.svg'
+// import logoDark from '@/assets/images/flowise_dark.svg'
+import logo from '@/assets/images/daianastudiologo.png'
+import logoDark from '@/assets/images/daianastudio_dark.png'
 
 import { useSelector } from 'react-redux'
 

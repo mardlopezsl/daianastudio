@@ -169,9 +169,9 @@ export const defaultThemeConfig = {
         },
         footer: {
             textColor: '#303235',
-            text: 'Powered by',
-            company: 'Flowise',
-            companyLink: 'https://flowiseai.com'
+            text: 'Daiana powered by',
+            company: 'Seidor Analytics',
+            companyLink: 'https://seidoranalytics.com/daiana'
         }
     }
 }

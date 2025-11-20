@@ -115,15 +115,47 @@ export class AccountService {
         const platform = this.identityManager.getPlatformType()
 
         switch (platform) {
-            case Platform.OPEN_SOURCE:
-                await this.ensureOneOrganizationOnly(queryRunner)
-                data.organization.name = OrganizationName.DEFAULT_ORGANIZATION
-                data.organizationUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.OWNER, queryRunner)
-                data.workspace.name = WorkspaceName.DEFAULT_WORKSPACE
-                data.workspaceUser.role = data.organizationUser.role
-                data.user.status = UserStatus.ACTIVE
-                data.user = await this.userService.createNewUser(data.user, queryRunner)
+            case Platform.OPEN_SOURCE: {
+                if (data.user.tempToken) {
+                    const user = await this.userService.readUserByToken(data.user.tempToken, queryRunner)
+                    if (!user) throw new InternalFlowiseError(StatusCodes.NOT_FOUND, UserErrorMessage.USER_NOT_FOUND)
+                    if (user.email !== data.user.email)
+                        throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, UserErrorMessage.INVALID_USER_EMAIL)
+                    const name = data.user.name
+                    if (data.user.credential) user.credential = this.userService.encryptUserCredential(data.user.credential)
+                    data.user = user
+                    const organizationUser = await this.organizationUserService.readOrganizationUserByUserId(user.id, queryRunner)
+                    if (!organizationUser)
+                        throw new InternalFlowiseError(StatusCodes.NOT_FOUND, OrganizationUserErrorMessage.ORGANIZATION_USER_NOT_FOUND)
+                    const assignedOrganization = await this.organizationservice.readOrganizationById(
+                        organizationUser[0].organizationId,
+                        queryRunner
+                    )
+                    if (!assignedOrganization)
+                        throw new InternalFlowiseError(StatusCodes.NOT_FOUND, OrganizationErrorMessage.ORGANIZATION_NOT_FOUND)
+                    data.organization = assignedOrganization
+                    const tokenExpiry = new Date(user.tokenExpiry!)
+                    const today = new Date()
+                    if (today > tokenExpiry) throw new InternalFlowiseError(StatusCodes.BAD_REQUEST, UserErrorMessage.EXPIRED_TEMP_TOKEN)
+                    data.user.tempToken = ''
+                    data.user.tokenExpiry = null
+                    data.user.name = name
+                    data.user.status = UserStatus.ACTIVE
+                    data.organizationUser.status = OrganizationUserStatus.ACTIVE
+                    data.organizationUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.MEMBER, queryRunner)
+                    data.workspace.name = WorkspaceName.DEFAULT_PERSONAL_WORKSPACE
+                    data.workspaceUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.PERSONAL_WORKSPACE, queryRunner)
+                } else {
+                    await this.ensureOneOrganizationOnly(queryRunner)
+                    data.organization.name = OrganizationName.DEFAULT_ORGANIZATION
+                    data.organizationUser.role = await this.roleService.readGeneralRoleByName(GeneralRole.OWNER, queryRunner)
+                    data.workspace.name = WorkspaceName.DEFAULT_WORKSPACE
+                    data.workspaceUser.role = data.organizationUser.role
+                    data.user.status = UserStatus.ACTIVE
+                    data.user = await this.userService.createNewUser(data.user, queryRunner)
+                }
                 break
+            }
             case Platform.CLOUD: {
                 const user = await this.userService.readUserByEmail(data.user.email, queryRunner)
                 if (user && (user.status === UserStatus.ACTIVE || user.status === UserStatus.UNVERIFIED))
@@ -305,10 +337,12 @@ export class AccountService {
                 data.user.tokenExpiry = tokenExpiry
                 data.user.status = UserStatus.INVITED
                 // send invite
-                const registerLink =
-                    this.identityManager.getPlatformType() === Platform.ENTERPRISE
-                        ? `${process.env.APP_URL}/register?token=${data.user.tempToken}`
-                        : `${process.env.APP_URL}/register`
+                const isEnterpriseOrOpenSource =
+                    this.identityManager.getPlatformType() === Platform.ENTERPRISE ||
+                    this.identityManager.getPlatformType() === Platform.OPEN_SOURCE
+                const registerLink = isEnterpriseOrOpenSource
+                    ? `${process.env.APP_URL}/register?token=${data.user.tempToken}`
+                    : `${process.env.APP_URL}/register`
                 await sendWorkspaceInvite(data.user.email!, data.workspace.name!, registerLink, this.identityManager.getPlatformType())
                 data.user = await this.userService.createNewUser(data.user, queryRunner)
 
@@ -368,7 +402,10 @@ export class AccountService {
                     queryRunner
                 )
                 let registerLink: string
-                if (this.identityManager.getPlatformType() === Platform.ENTERPRISE) {
+                const isEnterpriseOrOpenSource =
+                    this.identityManager.getPlatformType() === Platform.ENTERPRISE ||
+                    this.identityManager.getPlatformType() === Platform.OPEN_SOURCE
+                if (isEnterpriseOrOpenSource) {
                     data.user = user
                     data.user.tempToken = generateTempToken()
                     const tokenExpiry = new Date()
@@ -428,6 +465,68 @@ export class AccountService {
             data.workspaceUser = await this.workspaceUserService.saveWorkspaceUser(data.workspaceUser, queryRunner)
             data.role = await this.roleService.saveRole(data.role, queryRunner)
             await queryRunner.commitTransaction()
+
+            return data
+        } catch (error) {
+            if (queryRunner && queryRunner.isTransactionActive) await queryRunner.rollbackTransaction()
+            throw error
+        } finally {
+            if (queryRunner && !queryRunner.isReleased) await queryRunner.release()
+        }
+    }
+
+    public async createUserDirect(data: AccountDTO, currentUser?: Express.User) {
+        data = this.initializeAccountDTO(data)
+        const queryRunner = this.dataSource.createQueryRunner()
+        await queryRunner.connect()
+
+        try {
+            const workspace = await this.workspaceService.readWorkspaceById(data.workspace.id, queryRunner)
+            if (!workspace) throw new InternalFlowiseError(StatusCodes.NOT_FOUND, WorkspaceErrorMessage.WORKSPACE_NOT_FOUND)
+            data.workspace = workspace
+
+            const totalOrgUsers = await this.organizationUserService.readOrgUsersCountByOrgId(data.workspace.organizationId || '')
+            const subscriptionId = currentUser?.activeOrganizationSubscriptionId || ''
+            await checkUsageLimit('users', subscriptionId, getRunningExpressApp().usageCacheManager, totalOrgUsers + 1)
+
+            const workspaceRole = await this.roleService.readRoleByRoleIdOrganizationId(data.role.id, data.workspace.organizationId, queryRunner)
+            if (!workspaceRole) throw new InternalFlowiseError(StatusCodes.NOT_FOUND, RoleErrorMessage.ROLE_NOT_FOUND)
+            data.role = workspaceRole
+
+            const organizationRole = await this.roleService.readGeneralRoleByName(GeneralRole.MEMBER, queryRunner)
+
+            data.user.status = UserStatus.ACTIVE
+            if (!data.user.createdBy && currentUser?.id) {
+                data.user.createdBy = currentUser.id
+            }
+            data.user = await this.userService.createNewUser(data.user, queryRunner)
+
+            data.organizationUser.organizationId = data.workspace.organizationId
+            data.organizationUser.userId = data.user.id
+            data.organizationUser.roleId = organizationRole.id
+            data.organizationUser.createdBy = data.user.createdBy
+            data.organizationUser.status = OrganizationUserStatus.ACTIVE
+            data.organizationUser = await this.organizationUserService.createNewOrganizationUser(data.organizationUser, queryRunner)
+
+            data.workspace.updatedBy = data.user.createdBy
+
+            data.workspaceUser.workspaceId = data.workspace.id
+            data.workspaceUser.userId = data.user.id
+            data.workspaceUser.roleId = data.role.id
+            data.workspaceUser.createdBy = data.user.createdBy
+            data.workspaceUser.status = WorkspaceUserStatus.ACTIVE
+            data.workspaceUser = await this.workspaceUserService.createNewWorkspaceUser(data.workspaceUser, queryRunner)
+
+            await queryRunner.startTransaction()
+            data.user = await this.userService.saveUser(data.user, queryRunner)
+            await this.workspaceService.saveWorkspace(data.workspace, queryRunner)
+            data.organizationUser = await this.organizationUserService.saveOrganizationUser(data.organizationUser, queryRunner)
+            data.workspaceUser = await this.workspaceUserService.saveWorkspaceUser(data.workspaceUser, queryRunner)
+            await queryRunner.commitTransaction()
+
+            delete data.user.credential
+            delete data.user.tempToken
+            delete data.user.tokenExpiry
 
             return data
         } catch (error) {

@@ -118,9 +118,12 @@ const RegisterPage = () => {
     const getDefaultProvidersApi = useApi(loginMethodApi.getDefaultLoginMethods)
     const navigate = useNavigate()
 
+    const shouldShowInviteCode = isEnterpriseLicensed || (isOpenSource && !!token)
+
     const register = async (event) => {
         event.preventDefault()
-        if (isEnterpriseLicensed) {
+        const isOpenSourceInvite = isOpenSource && !!token
+        if (isEnterpriseLicensed || isOpenSourceInvite) {
             const result = RegisterEnterpriseUserSchema.safeParse({
                 username,
                 email,
@@ -143,7 +146,7 @@ const RegisterPage = () => {
                 const errorMessages = result.error.errors.map((err) => err.message)
                 setAuthError(errorMessages.join(', '))
             }
-        } else if (isCloud) {
+        } else if (isCloud || isOpenSource) {
             const formData = new FormData(event.target)
             const referral = formData.get('referral')
             const result = RegisterCloudUserSchema.safeParse({
@@ -235,7 +238,7 @@ const RegisterPage = () => {
             setToken('')
             setUsername('')
             setEmail('')
-            if (isEnterpriseLicensed) {
+            if (isEnterpriseLicensed || isOpenSource) {
                 setSuccessMsg('Registration Successful. You will be redirected to the sign in page shortly.')
             } else if (isCloud) {
                 setSuccessMsg('To complete your registration, please click on the verification link we sent to your email address')
@@ -326,7 +329,7 @@ const RegisterPage = () => {
                                     <i>Kindly use a valid email address. Will be used as login id.</i>
                                 </Typography>
                             </Box>
-                            {isEnterpriseLicensed && (
+                            {shouldShowInviteCode && (
                                 <Box>
                                     <div style={{ display: 'flex', flexDirection: 'row' }}>
                                         <Typography>

@@ -16,6 +16,13 @@ router.post(
     accountController.invite
 )
 
+router.post(
+    '/create-user',
+    IdentityManager.checkFeatureByPlan('feat:users'),
+    checkAnyPermission('workspace:add-user,users:manage'),
+    accountController.createUserDirect
+)
+
 router.post('/login', accountController.login)
 
 router.post('/logout', accountController.logout)

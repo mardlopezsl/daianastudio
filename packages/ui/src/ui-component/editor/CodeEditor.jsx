@@ -31,7 +31,7 @@ export const CodeEditor = ({
         '.cm-content':
             lang !== 'js'
                 ? {
-                      fontFamily: `'Inter', 'Roboto', 'Arial', sans-serif`,
+                      fontFamily: colorTheme.typography?.fontFamily,
                       fontSize: '0.95rem',
                       letterSpacing: '0em',
                       fontWeight: 400,

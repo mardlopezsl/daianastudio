@@ -276,6 +276,14 @@ export class IdentityManager {
 
     public static checkFeatureByPlan(feature: string) {
         return (req: Request, res: Response, next: NextFunction) => {
+            try {
+                const runningApp = getRunningExpressApp()
+                if (runningApp.identityManager.isOpenSource()) {
+                    return next()
+                }
+            } catch (error) {
+                // if we cannot resolve the running app for some reason, fall back to existing checks
+            }
             const user = req.user
             if (user) {
                 if (!user.features || Object.keys(user.features).length === 0) {

@@ -32,6 +32,9 @@ export const useAuth = () => {
     }
 
     const hasDisplay = (display) => {
+        if (isOpenSource) {
+            return true
+        }
         if (!display) {
             return true
         }

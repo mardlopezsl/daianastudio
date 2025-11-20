@@ -95,7 +95,7 @@ const GitHubStarButton = ({ starCount, isDark }) => {
                     overflow: 'hidden',
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}`,
                     fontSize: '12px',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+                    fontFamily: theme.typography?.fontFamily,
                     fontWeight: 600,
                     lineHeight: 1
                 }}
@@ -263,7 +263,7 @@ const Header = ({ handleLeftDrawerToggle }) => {
                         }
                     }}
                 >
-                    <GitHubStarButton starCount={starCount} isDark={isDark} />
+                    {/* <GitHubStarButton starCount={starCount} isDark={isDark} /> */}
                 </Box>
             ) : (
                 <Box sx={{ flexGrow: 1 }} />

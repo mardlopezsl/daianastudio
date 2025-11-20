@@ -111,7 +111,7 @@ const Logs = () => {
             color: 'rgba(120, 120, 120, 0.5)'
         },
         '.cm-content': {
-            fontFamily: 'Roboto, sans-serif',
+            fontFamily: colorTheme.typography?.fontFamily,
             fontSize: '0.95rem',
             letterSpacing: '0em',
             fontWeight: 400,
